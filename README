@@ -1,0 +1,22 @@
+Janus version 2.0.1
+
+Janus is a security package for application sandboxing.
+
+Janus is currently in alpha pre-release, please read the RELEASE_NOTES
+for more information about its use and distribution.
+
+Janus has a dedicated mailing list for reporting bugs, sending patches, 
+release announcements etc.
+
+You can subscribe to the dedicated mailing list by sending an email 
+message to majordomo@ninja.cs.berkeley.edu with "subscribe janus"
+in the body of your message.
+
+For instructions on installing janus see INSTALL in this directory.
+
+For examples of janus policies see the examples/ directory.
+
+For documentation on how Janus works and how to use Janus see docs/MANUAL.
+
+
+Tal Garfinkel and David Wagner, University of California, Berkeley

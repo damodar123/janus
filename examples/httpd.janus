@@ -1,0 +1,104 @@
+# Baseline Apache Policy
+#
+
+####### Confined process starting state
+
+# We chdir to starting_dir before the daemon starts
+starting_dir /home/httpd
+starting_uid root
+starting_gid root
+
+
+# Set up a minimal environment for Apache.
+# If there are any other directories where Apache might execute programs from,
+# you may need to add them to Apache's PATH; do that here.
+# (not for security purposes, just to help Apache find those executables)
+starting_env  PATH=/usr/sbin
+
+######### Resource limits
+
+# Note!! all sizes are in megabytes
+
+process_limit MAX_DATA_SIZE 100
+process_limit MAX_STACK_SIZE 100
+process_limit MAX_RSS_SIZE 100
+
+##### User and Group access policy
+
+# Allow Apache to setuid to nobody to drop permissions
+# (e.g., when executing cgi scripts)
+uid allow nobody
+group allow nobody
+
+#### Network access policy
+
+# Allowed to receive HTTP requests destined to port 80 on this machine.
+# This is a little subtle: here 0.0.0.0 is _not_ a wildcard that matches
+# all IP addresses, but rather is a special value (called INADDR_ANY, in C)
+# that applications use to ask the OS to pick any of our local IP addresses
+# and use it.  We allow Apache to do this, as long as it uses port 80.
+net allow bind tcp 0.0.0.0 80
+
+# Allow Apache to issue DNS requests to port 53 at any IP address
+net allow connect udp ALL_IP_ADDRS 53
+net allow connect tcp ALL_IP_ADDRS 53
+
+
+#### Filesystem access policy
+
+# Minor note (may be ignored for all but the wizards):
+#     libc can optionally use nscd for getting group/hosts/passwd information.
+#     It communicates via a Unix-domain socket.  We recommend not allowing
+#     access to this socket; libc will try and silently fail to use nscd,
+#     without any adverse consequences.
+
+
+# The executables.
+path allow read,exec /usr/sbin/httpd
+
+# Static content (modify this if your DocumentRoot is elsewhere).
+# Note that this recursively allows read access to everything under
+# /home/httpd, even if it is several sub-directories down.
+path allow read /home/httpd/*
+
+#CGI SUPPORT
+
+# Note that Apache uses suexec to start cgi-bin's with the appropriate uid.
+# Enable this if you need it.
+#path allow read,exec /usr/sbin/suexec
+
+
+# Dynamic content: Allow Apache to run all cgi-bin's under this directory.
+# Modify this if your cgi-bin's live elsewhere, or if there are some
+# cgi-bin scripts you don't want Apache to be able to execute.
+#path allow read,exec /home/httpd/cgi-bin/*
+
+
+# Configuration files
+path allow read /etc/httpd/* /etc/httpd
+
+# Log files
+path allow write /etc/httpd/logs/*
+path allow write /var/log/httpd/*
+
+# Lock files
+path allow read,write,unlink /var/run/httpd.pid
+path allow read,write,unlink /var/lock/httpd.lock.* /var/run/httpd.lock.*
+
+
+# Shared libraries
+path allow read /lib/* /usr/lib/* /usr/share/lib/zoneinfo/* 
+path allow read /etc/ld.so.preload /etc/ld.so.cache
+path allow read /dev/zero  
+path allow read,write /dev/null
+
+# Miscellaneous global files Apache needs to be able to read
+path allow read /etc/group /etc/nsswitch.conf /etc/localtime
+path allow read /etc/resolv.conf /etc/host.conf /etc/hosts /etc/mime.types
+
+# This is a little icky.  Apache (like many other programs) needs access
+# to /etc/passwd to learn the uid<->username mapping.  However, if you're
+# not using shadow passwords, this also exposes your encrypted passwords,
+# which is less than ideal.  Unfortunately, there's not much we can do about
+# this at the moment.  For best security, use shadow passwords.
+path allow read /etc/passwd

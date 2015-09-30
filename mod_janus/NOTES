@@ -1,0 +1,53 @@
+Some notes on using and understand mod_janus
+---------------------------------------------
+
+mod_janus (formerly fcap) is a kernel module that 
+janus uses for process confinement. It 
+supports interposing on system calls, suspending processes,
+reading call arguments in an efficient
+race free fashion, querying the kernel about process metadata, 
+etc. 
+
+mod_janus the device
+--------------------
+
+mod_janus is implimented as a standard linux charecter
+device. You will note that is has not been assigned a 
+permanent major number and as such it requests one
+dynamically everytime it is installed, hence the 
+need to create a new mod_janus device entry with
+install_mod each time you use the device (e.g., each
+time you reboot).
+
+Since talking to a charecter device directly is pretty icky
+there is a user library the provides a nice abstraction 
+for interaction with mod_janus (called fcap for historical
+reasons). The interface for this library is given by
+fcap.h, the library itself is typically build as libfcap.a.
+
+
+mod_janus and ptrace
+--------------------
+
+You may not use mod_janus in combination with ptrace.
+For security reasons, if a process is being 
+ptraced mod_janus will not let you trace it; also if you
+are tracing a process using mod_janus ptrace will not be
+allowed to trace it.
+
+Using libfcap
+-------------
+
+The libfcap interface is documented in fcap.h. Examples of
+its use are found in trace.c in the janus code. Most of
+the interesting bits of what it does can be found in
+main.c and ent.S.
+
+
+Apologies
+----------
+
+The documentation for fcap is somewhat incomplete, feel 
+free to direct further questions to the janus mailing
+list (see the MANUAL or README in the Janus distribution
+on how to join).

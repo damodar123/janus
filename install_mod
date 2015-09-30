@@ -1,0 +1,22 @@
+#!/bin/sh
+module="mod_janus"
+device="mod_janus"
+user="root"
+group="root"
+mode="666"
+
+# invoke insmod with all arguments we got
+/sbin/rmmod $module 2> /dev/null
+/sbin/insmod -f $module || exit 1
+
+#look up dynamically allocated major number in proc
+major=`cat /proc/devices | awk "\\$2==\"$module\" {print \\$1}"`
+
+# Remove stale nodes and replace them, then give gid and perms
+
+rm -f /dev/${device}
+mknod /dev/${device} c $major 0
+
+chown $user  /dev/${device}
+chgrp $group /dev/${device}
+chmod $mode  /dev/${device}

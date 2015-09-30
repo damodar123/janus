@@ -1,0 +1,13 @@
+#!/bin/sh
+# Tries to print a list of all the system calls the given program may use.
+# This is only a heuristic, and may be wrong.
+# It works by querying the shared library functions linked in, and looking
+# for system calls; it may give incorrect results.
+# 
+# Usage: printcalls /path/to/binary/executable
+
+for i in `nm -D $1 | cut -c11- | sed 's/^[ ]\+U //'`
+do
+    grep "__NR_$i[ 	]" /usr/include/asm/unistd.h \
+        | awk '{print $2}' | sed 's/__NR_//'
+done

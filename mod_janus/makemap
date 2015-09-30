@@ -1,0 +1,5 @@
+#!/bin/tcsh
+set a = "/proc/ksyms"
+set b = "/boot/System.map"
+echo Making system map from $a $b...
+cat $a $b | sed 's/ . / /' | awk '{print $1,"T",$2}' | sort -u > /tmp/System.map

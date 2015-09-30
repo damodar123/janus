@@ -1,0 +1,14 @@
+This is a Janus version 2 alpha pre-release, This code is being supplied 
+in order to allow testing, auditing and evaluation by the security community.
+It is not yet intended for production use! 
+
+An alpha release to the general public will be forthcoming.
+
+Please do not announce this release in any public forum 
+(bugtraq, etc.).  However, do feel free to forward this package
+to other colleagues in the community who may be interested.
+
+Good luck with Janus, we look forward to your feedback,
+
+Tal Garfinkel <talg@cs.berkeley.edu>
+David Wagner  <daw@cs.berkeley.edu>

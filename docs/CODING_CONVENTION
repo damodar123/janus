@@ -1,0 +1,15 @@
+This file sets for the coding standards for mod_janus and janus, as 
+with any other aspect of programming there are times when exceptions
+to the rules make sense. 
+
+[1] All whitespace should be spaces not tabs.
+
+[2] Bracing and indenting should be k&r style with four spaces per tab, 
+    it should conform roughly to indent -kr -ts 4.  Use extra braces to
+    prevent inadvertent bugs from changing block scoping.
+
+[3] All return values that could indicate a potential error must be
+    checked.
+
+[4] strncpy and strncat are banned!, strlcat and strlcpy are
+    provided in bsdstring.

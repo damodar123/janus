@@ -1,0 +1,84 @@
+# Basic Bind policy
+#
+# Written for named 8.2.1 with standard Redhat 6.1 install
+#
+####### Confined process starting state
+
+# We chdir to starting_dir before the daemon starts.
+starting_dir /var/named
+starting_uid root
+starting_gid root
+
+
+# A minimalistic environment for named.
+starting_env  PATH=/usr/sbin
+
+######### Resource limits
+
+# Note!! all sizes are in megabytes
+
+process_limit MAX_DATA_SIZE 60
+process_limit MAX_STACK_SIZE 40
+process_limit MAX_RSS_SIZE 40 
+
+
+# named finds all local IP addresses and explicitly binds to port 53 of each
+# of them by name.  We have to allow this.
+net allow bind udp MYHOST_ADDR 53
+net allow bind tcp MYHOST_ADDR 53
+
+# Allow listen on localhost (port 53) for requests via the loopback interface.
+net allow bind udp 127.0.0.1 53 
+net allow bind tcp 127.0.0.1 53 
+  
+# Allow binding to any of our local IP addresses to receive DNS requests.
+# This is a little subtle: here 0.0.0.0 is _not_ a wildcard that matches
+# all IP addresses, but rather is a special value (called INADDR_ANY, in C)
+# that applications use to ask the OS to pick any of our local IP addresses
+# and use it.  We allow bind to do this.
+net allow bind udp 0.0.0.0 53 
+
+# Allows udp over DNS port so bind can send DNS requests to _any_ host.
+net allow connect udp ALL_IP_ADDRS 53
+
+# Allow named to respond to DNS lookup queries from any host.
+# Replying to a DNS query requires sending a packet back to that
+# host.  Since we're dealing with UDP, there is no existing connection
+# to respond on, so named must create a new one.  As a consequence,
+# we have to allow named to send arbitrary UDP packets to arbitrary ports
+# on any host it likes.
+# If you only want to service DNS requests from some list of hosts, you
+# can list them here instead of ALL_IP_ADDRS.
+net allow connect udp ALL_IP_ADDRS
+
+# Allow access to /dev/log for logging of errors.
+net allow connect unix-domain /dev/log
+
+# Allow use of ndc (used for controlling named).
+net allow connect unix-domain /var/run/ndc
+net allow bind unix-domain /var/run/ndc
+path allow read,write,unlink /var/run/ndc
+
+# The executable.
+path allow read,exec /usr/sbin/named
+
+# Configuration files
+path allow read /etc/named.conf 
+
+# Global networking configuration information that named needs to read
+path allow read /etc/protocols /etc/localtime /etc/resolv.conf /etc/services
+
+# Temporary files
+path allow read,write,unlink /var/run/named.pid /var/tmp/named_dump.db
+path allow read,write,unlink /var/tmp/named.run /var/tmp/named.stats
+
+# Temporary name store
+path allow read,write /var/named
+path allow read,write,unlink /var/named/named.ca /var/named/named.local 
+path allow read,write,unlink /var/named/named.run /var/named/named_dump.db
+
+# Shared libraries, etc.
+path allow read /dev/zero 
+path allow read,write /dev/null 
+path allow read /lib/* /usr/lib/* /usr/share/lib/zoneinfo/* 
+path allow read /usr/share/* /etc/ld.so.preload /etc/ld.so.cache

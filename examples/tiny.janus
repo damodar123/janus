@@ -1,0 +1,19 @@
+# This is a super simple example policy that lets you run bash.
+# It is useful for testing, e.g., whether Janus is working properly.
+
+# Usage: janus -i -f tiny.janus /bin/bash
+#  (note: don't forget the "-i" flag; otherwise, stdin/stdout will be closed)
+
+# Janus will start bash in the /tmp directory.
+starting_dir /tmp
+
+# We start with the following minimalistic environment.
+starting_env PATH=/bin:/usr/bin FOO=bar
+
+# We must be able to read and exec the bash executable in order to run it.
+path allow read,exec /bin/bash
+
+# Allow access to basic dynamically-linked libraries.
+# Note the semantics of wildcard globbing in Janus: "/lib/*" matches all files
+# under /lib (or sub-dirs of sub-dirs of /lib, etc.), recursively.
+path allow read /lib/* 

@@ -1,0 +1,5 @@
+#!/bin/sh
+# Recursively lists all the symlinks in a directory
+# Usage: listsymlinks directory
+
+find $* -lname '*' | xargs ls -l | awk '{print$9$10$11}'

@@ -1,0 +1,1055 @@
+        JANUS -- Practical application sandboxing in Linux
+
+This is the manual for Janus. Janus is currently in the alpha stage
+of development and as such this manual may not exactly reflect the
+current state of development. 
+
+Tal Garfinkel <talg@cs.berkeley.edu>
+David Wagner <daw@cs.berkeley.edu>
+
+Janus has a dedicated mailing list for reporting bugs, sending patches, 
+release announcements etc.
+
+You can subscribe to the dedicated mailing list by sending an email 
+message to majordomo@ninja.cs.berkeley.edu with in the body 
+(not subject):  subscribe janus.
+
+
+Reporting Bugs
+--------------
+
+If you would like to report a bug please send it to the
+mailing list, we will do out best to reply promptly
+with a fix. To make our task easier please include 
+the following information in a bug-report.
+
+- The nature of the bug.
+- How janus was invoked (i.e. janus -v -vv -f ../named.janus /usr/sbin/named)
+- The version of the sandboxed command (e.g. named 8.2.2-P3)
+- Any error messages,failed assertions that janus generated
+- If you compile your own kernel, the /usr/src/linux/.config file.
+- Your current kernel version.
+- What Linux distribution/what version.
+- The janus version(the VERSION variable in the top level makefile)
+
+mod_janus has very verbose debugging output that can be
+enabled by changing the debug level in the Makefile.
+
+listing of these messages can be very helpful for tracking
+down bugs in the kernel module, if you encounter such a
+bug and can reproduce it with debugging enabled this information
+could be very helpful for us.
+
+If there is a kernel oops please send either the oops with
+symbol information resolved by klogd or follow the 
+directions in /usr/src/linux/Documents/oops-tracing.txt.
+
+In order to simplify getting the correct symbol 
+information there is a script to generate a System.map 
+for ksymoops called makemap in the mod_janus directory.
+
+This as with the rest of janus this manual is a work in progress, 
+watch the mailing list for updates.
+
+Manual Outline
+---------------
+    Tool Overview
+    Tutorial Introduction
+    Command Reference
+    Related Work
+
+
+Introduction
+------------
+
+Janus is a package for running processes in a restricted execution
+ (also called a sandbox). 
+
+Janus consists of two parts, janus the program, that allows
+you to run a sandboxed application and mod_janus the kernel
+module that janus uses to help it accomplish this. This manual focuses
+on the user level program janus. The kernel module is
+documented in NOTES in the mod_janus directory as well
+as the header files that accompany it. 
+
+janus has functionality to create and manage an application 
+sandbox as well as system call tracing functionality to 
+help write security policies.
+
+The current version (2.0.1) of Janus differs in many significant
+ways from the orginal janus prototype on which it is based. As
+such we recommend that you read the present janus documentation
+carefully even if you are familiar with the original version.
+
+To use Janus we reccomend you
+
+1) Follow the instructions in INSTALL to install the janus package.
+2) Read this manual. 
+3) Use the example policy files provided as template for
+   writing policies for your application.
+
+Some portions of this manual are more technical and require some
+expertise in the unix api to fully grok. It is recommended that
+users consult the texts listed in the references section 
+as well as the Linux man pages and source code for discussion
+of the particulars of the Linux api. For further discussion 
+of application sandboxing in general see the related work 
+section.
+
+
+
+
+What is Janus, What is a sandbox?
+---------------------------------
+
+Janus is a package that allows you to run a processes in an 
+application sandbox. This means a process running under Janus will
+be started given only the resources(environment, file descriptors, etc.)
+that you explicitly allocate to it, and any further resources/system 
+interactions that it requests (i.e. system calls that it makes)    
+at  runtime must be explicitly allowed by Janus.  All child 
+processes of a process in a sandbox will also be confined to that 
+sandbox. 
+
+When a command is run in a sandbox it is started in
+a "clean" state. Its descriptor space and environment
+are cleared. 
+
+Before a sandboxed process begins running 
+resources limits are setup to prevent it from using an
+undesirable amount of memory, processes etc.
+
+After a command is started in a sandbox all its interactions 
+with the operating system are regulated through system call 
+interposition. When a sandboxed process makes a system call 
+that process is paused while janus decides whether or not to 
+allow the call to proceed. 
+
+If janus decides to allow a call then the system call
+takes place and the process resumes execution as normal.
+
+If janus decides to deny a call then the system call
+does not take place and instead returns EPERM,
+the process then resumes execution as normal.
+
+If for any reason Janus exits, all processes running
+in the sandbox that it is controlling will be killed.
+
+To recap, Janus runs a command and all of the children 
+that it spawns in a "sandbox". This sandbox consists of
+a "clean" startup environment, resource limits and 
+a restricted execution environment in which all 
+system calls are checked by Janus before being allowed 
+to proceed.
+
+By restricting the application to this sandbox Janus aims
+to limit the amount of damage that can be done by
+the application to your system.
+
+Trying out janus
+-----------------
+
+Most of an how the application sandbox will work is
+given by a policy file. A policy file consists
+of a description telling janus how to setup 
+the sandboxed process, what resource limits
+to impose and what system resources to allow
+access to. Blank lines and comments (lines beginning
+with #) are ignored.
+
+Here is an example of a very simple policy file, found
+under examples/tiny.janus
+
+#this is a super simple example policy that lets you run bash
+
+#this is were we start life
+starting_dir /tmp/sandbox
+
+#this is our starting environment
+starting_env PATH=/bin:/usr/bin FOO=bar
+
+#we must be able to read and exec bash in order to run it
+path allow read,exec /bin/bash
+
+# allow basic libraries 
+path allow read /lib/* 
+
+This is not an especially useful policy, it will let you run
+bash starting in director /tmp/sandbox. You cannot leave that
+directory, you cannot access the file system or network.
+
+To try this out run
+
+./janus -i -f examples/tiny.janus /bin/bash
+
+The -i tells janus this is an interactive application so janus
+will allow it to inherit stdin/stdout/stderr and the current 
+session.
+
+For a more interesting view of what is going on try running this 
+with the -v or -vv flags to see what system calls janus is denying 
+and what system calls janus is checking. 
+
+
+How janus lets you control application starting state
+----------------------------------------------------
+
+Janus provides you with several directives that allow
+you to specify properties of the sandboxed applications
+starting state. 
+
+These directives are:
+
+starting_dir,starting_uid, and starting_gid. The later
+two options are enabled only if janus is being run as root.
+
+They are used as follows.
+
+starting_dir /var/foo
+starting_uid nobody
+starting_gid nobody
+
+The first directive, starting_dir lets you specify where
+the application will beginning running, the next two let
+you specify what identity the sandboxed process will have
+when it begins running.
+
+starting_dir must always be specified, the other
+startup directives are optional. 
+
+
+How janus lets you control resource usage
+-----------------------------------------
+
+Janus provides you with three directives to set limits
+on sandboxed processes memory usage.
+
+process_limit MAX_STACK_SIZE size   #largest allowable size for stack
+process_limit MAX_DATA_SIZE size    #largest allowable combined size 
+                                    #for heap and static data
+process_limit MAX_RSS_SIZE size     #advisory limit on maximum number of
+                                    #resident pages the process can hold
+
+These directives allow you to set limits on the per process
+memory utilization of processes in your sandbox.
+
+size is taken to be a the size in megabytes.
+
+
+How Janus lets you control access to file system resources
+---------------------------------------------------------
+
+Janus will only allow an application to manipulate(that is
+read from, write to or call exec on) files in the file system
+that have been explicitly allowed in the policy file.
+
+Access to a resource is allowed using the path keyword.
+
+For some examples of this let us again reffer to tiny.janus.
+
+path allow read,exec /bin/bash
+
+Here we allow the sandboxed process the ability to exec /bin/bash.
+There are two important things to note here. First, in order
+for the sandboxed process to be allowed to exec a file 
+we must allow it read and exec access. Second, /bin/bash is
+only exec'd after the process has been placed in the sandbox,
+so whatever command we ask janus to run on the command link must 
+be authorized in the policy file.
+
+
+# allow basic libraries 
+path allow read /lib/* 
+
+In our second example we not the use of the /* syntax. Many people
+expect this to mean (all files in /lib/*). This is NOT what this 
+means, /lib/* will match all files with the prefix /lib/* i.e.
+
+/lib/foo
+/lib/foo/foo
+...
+
+
+We realize this syntax is pretty icky, we plan to change it
+soon.
+
+To allow access to a file which is a symlink you must allow
+access both to that file and to what it points to. 
+
+for example, too allow read access to /var/foo -> /var/var/foo
+
+you must say
+
+path allow read /var/foo
+path allow read /var/var/foo
+
+note that in this case 
+
+path allow read /var/* would also work.
+
+
+For more on how path names are matched see the notes
+paths below, for the complete syntax for the path
+directive also see below.
+
+
+How Janus allows access to Network Resources
+--------------------------------------------
+
+See description of the net directive below.
+
+
+
+
+<More tutorial stuff here>
+
+
+
+
+Running a program under Janus
+----------------------------------------
+
+See man page for usage and options.
+
+
+
+Running Interactive applications under janus
+--------------------------------------------
+
+By default Janus will start a sandboxed process with a new session (so
+all tty events such as signals will go only to janus) and redirect 
+stdin/stdout/stderr to /dev/null. Clearly this is not desirable
+for running interactive applications. To disable this behavior and
+have the sandboxed process inherit stdin/stdout/stderr and its
+session from janus use the -i (interactive) command line flag when
+starting your application.
+
+Running X applications under janus
+----------------------------------
+
+The original janus prototype had some features to support
+x applications, the current version does not have any support
+for x applications at this time as development has focused
+primarily on supporting network services such as BIND. 
+
+Process tracing in Janus
+------------------------
+
+janus provides the -v and -vv (verbose and very verbose) flags
+to allow you to monitor the behavior of the processes that are 
+running in a Janus sandbox. The first flag will enable the reporting
+of all system call requests that are denied while the second 
+flag will enable the reporting of all system call events that
+janus traps.
+
+For an example of this, here is a -v listing of apache starting
+up on my machine.
+
+[talg@dot j2]# ./janus -i -v -f policy/httpd.janus /usr/sbin/httpd
+Denying connect(4, /var/run/.nscd_socket, 110) => SOCK_STREAM : No module allowed call.
+Denying connect(4, /var/run/.nscd_socket, 110) => SOCK_STREAM : No module allowed call.
+Denying setsockopt(16, 6, SO_DEBUG, ...) : Bad socklevel.
+
+Note that a few calls are denied as a matter of normal operation,
+in this case apache is trying to connect to the name service cache 
+daemon. Lets take a look at how to read this
+
+Denying 
+
+All denied calls are listed with Denying as the first word.
+
+connect(4, /var/run/.nscd_socket, 110) => SOCK_STREAM 
+
+Next we have the prototype of the call that was denied, additionally
+since this is a socket call janus tells us the type of socket
+that it was attempted on (SOCK_STREAM i.e. a tcp socket).
+
+: No module allowed call.
+
+Last we have a colon followed by the reason that the call was denied,
+as we can see no module was willing to comment on this call so it
+was denied. Not that in the last call a different reason is given,
+i.e. "Bad socklevel", In this case a module (namely net) explicitly
+denied the call.
+
+Now lets take a look at very verbose tracing.
+
+[talg@dot j2]# ./janus -i -vv -f policy/httpd.janus /usr/sbin/httpd
+[8391] execve("/usr/sbin/httpd", ...)
+[8391] open("/etc/ld.so.preload", O_RDONLY)
+[8391] open("/etc/ld.so.cache", O_RDONLY)
+[8391] open("/lib/libm.so.6", O_RDONLY)
+[8391] open("/lib/libcrypt.so.1", O_RDONLY)
+[8391] open("/lib/libdb.so.3", O_RDONLY)
+[8391] open("/lib/libdl.so.2", O_RDONLY)
+[8391] open("/lib/libc.so.6", O_RDONLY)
+[8391] personality(PER_LINUX)
+[8391] stat("/usr/sbin/suexec", ...)
+[8391] open("/etc/httpd/conf/httpd.conf", O_RDONLY)
+[8391] socket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
+[8391] connect(4, /var/run/.nscd_socket, 110) => SOCK_STREAM
+Denying connect(4, /var/run/.nscd_socket, 110) => SOCK_STREAM : No module allowed call.
+[8391] open("/etc/nsswitch.conf", O_RDONLY)
+.
+.
+.
+.
+[8392] fork() = 8393
+[8392] fork() = 8394
+[8393] setgid(99)
+[8393] open("/etc/group", O_RDONLY)
+[8393] fcntl(3, F_GETFD, 0)
+[8393] fcntl(3, F_SETFD, 1)
+[8393] open("/etc/ld.so.cache", O_RDONLY)
+[8393] open("/lib/libnss_nisplus.so.2", O_RDONLY)
+.
+.
+.
+As you can see this is only the beginning of a -vv list, it
+looks very much like what one might see if they had straced
+the process. There are some important differences, first, these
+are only the calls that janus traps, calls such as getuid are
+not shown because janus does not trap them. Second, each call
+is preceded by the pid of the process making the call. Third,
+accept in the case of fork return values are never shown
+(because janus typically does not trap system call exit 
+events).
+
+Process tracing in janus using the -v flag can be useful for
+detecting potential intrusions as well as problems that an
+a correctly behaving application may be encountering
+when trying to access a resource that has not been allowed 
+by the security policy.
+
+
+Process tracing using the -vv flag is best reserved for debugging policies
+as it can incur an undesirable performance penalty and provides little
+useful information beyond what -v gives in the course of normal 
+operation.
+
+Policy writing tips
+-------------------
+
++Do use the -v and -vv flags to get a better understanding
+ of what program behavior is being allowed/denied.
+
++Do use the --trace_no_security flag to find out what
+ resources will be denied and to uncover potential bugs/
+ default policy problems in janus/mod_janus.
+
++Do use strace to get an idea of what a program is doing, it
+ will give you more flexibility than using the tracing
+ functionality that janus provides.
+
+for example: 
+
+strace -f -e trace=file
+
+will tell you alot about what files your web server wants to access.
+
++Be aware that running with -vv will incur a performance 
+ penalty.
+
++Don't allow anything untrusted program does not need.
+
++Don't allow anything you don't understand the implications of.
+
++Don't allow something just because a program tries to access it,
+ it may not need it.  Most of the default policies we provide will deny some
+calls in the course of executing a normally running program,
+this is not cause for concern or for changing policy, rather
+there are some behaviors which under unfavorable circumstances
+could pose a security threat and are not required for
+proper program function therefor we deny them.
+
++if you do feel that some behavior that is denied by
+janus should be allowed, ask us why we have not 
+allowed it or try to get some peer review before
+you enable it, system call interactions can be subtle.
+
++if you are denying some explicitly ask yourself why? Most
+ things should be denied by default, deny is rarely needed.
+
++if an application exits after a series of denied system calls
+ look at denied calls from bottom up (most recent to least recent)
+ instead of top down to find the call that caused the application 
+ to fail.
+
+
+Reference
+----------
+
+How policy files are read 
+--------------------------------
+
+Directives are given one per-line.  Blank lines and comment lines 
+(lines which begin with a "#") are ignored.  Comments extend to the 
+end of the line.  
+
+Directives are order independent.  
+
+All policy directives(i.e. net,path,uid,gid) have the 
+form: name (allow|deny) parameters.. .
+
+For example, the line
+    path allow read /etc/passwd
+
+allows read access to the /etc/passwd file.
+
+If some other directive denies that path it will
+override all other allows.
+
+For example if we say
+
+path allow read /etc/*
+path deny  read /etc/passw
+
+Then access to /etc/passwd will be denied. Note that the order
+and number of directives allowing or denying access to a resource
+does not matter, one deny overrides all allows. 
+
+so,
+
+path allow read /etc/*
+path deny  read /etc/passw
+
+is equivalent to,
+
+path deny  read /etc/passw
+path allow read /etc/*
+
+If access to a resource is not explicitly allowed 
+any request to access that resource will be denied.
+
+
+Command line flags
+------------------
+
+-v verbose
+
+When a program is run under Janus with the verbose flag all 
+of the system calls that Janus denies are listed to stderr. 
+
+-vv very verbose
+
+When the very verbose flag is enabled all calls that Janus
+traps are listed to stderr. 
+
+-d debug
+
+Turns on debugging stuff that developers might care about.
+
+-i interactive
+
+By default janus will redirect stdin/stdout/stderr of a traced process
+to /dev/null and will run that process in a new session. If the -i 
+switch is given stdin/stdout/stderr will be inherited from janus
+as will the current session.
+
+
+-f 
+
+This flag is required, used to specify the location of the policy.
+
+-s 
+
+This will display a brief summary of the policy the exit.
+
+-h
+Prints a brief help message with an abbreviated version of this
+information.
+
+--trace-no-security
+
+    THIS IS FOR DEBUGGING POLICIES ONLY, This flag gives a listing 
+    of all the calls that janus would have denied, then allows
+    all calls to proceed.
+
+---------------------------
+
+
+Startup Directives
+------------------
+
+Startup directives are used by Janus to configure the starting state
+of the process that will run the sandboxed command. Note that some
+of these properties (such as priority) will be inherited by all
+processes in the sandbox while others (such as starting environment)
+will only apply to the first process run in the sandbox.
+
+
+*starting_dir 
+o/r: required
+Usage: starting_dir path
+purpose: The sandbox process will start its life with working dir path,
+         if the directory does not exist it will be created with
+         permissions 700 with owner starting_uid and group starting_gid.
+
+Default: no default
+
+*starting_env 
+o/r: optional
+Usage: starting_env ENV_STR
+purpose: The sandboxed process will start its life with the
+environment given by ENV_STR
+Default: process starts with an empty environment.
+
+
+
+*starting_uid (requires janus be run as root)
+o/r: optional
+Usage: starting_uid user
+purpose: The sandbox process will start its life with of uid user. uid 
+is resolved at startup.
+Default: current uid
+
+*starting_gid (requires janus be run as root)
+o/r: optional
+Usage: starting_gid group
+purpose: The sandbox process will start its life with gid of group.
+Default: current gid
+
+
+Resource limits
+---------------
+
+Support for resource limits is still limited in janus,
+for the moment we have not included support for setting
+most posix resource limits as we consider them to
+be not terribly useful for enhancing security. Better 
+support for resource limits is planned for future 
+versions.
+
+
+*process_limit
+
+Usage:  process_limit (MAX_STACK_SIZE | MAX_DATA_SIZE | MAX_RSS_SIZE) size
+
+purpose:
+    Each process in the sandbox will have per process
+    resource limits that it will inherit from the very
+    first process run in the sandbox. All limits currently
+    pertain to memory, all sizes are in megabytes.
+
+    For example:
+    
+    process_limit MAX_STACK_SIZE 10  would mean 
+    that the stack size would be limited to 10 megabytes in size.
+
+    All limits are implemented using posix setrlimit unless 
+    otherwise noted. As such if a process exceeds a resource
+    limit it will be sent the appropriate signal. See setrlimit(2)
+    or ([1] pp. 180-181) for further discussion of resource limits.
+   
+    limits:
+    
+    MAX_STACK_SIZE - Limits the size of process stack to size bytes (see 
+            setrlimit(2) RLIMIT_STACK).
+
+    MAX_DATA_SIZE -  Limits the size of data segment to size bytes,  
+            note this is includes the "static data" segment 
+            and heap (see setrlimit(2) RLIMIT_DATA).
+
+    MAX_RSS_SIZE - Limits the size of the resident set to size bytes 
+          (i.e. total pages in memory a process may have), note 
+          that this is only an advisory to the VM system not a 
+          hard limit (see setrlimit(2) RLIMIT_RSS). 
+
+    
+    
+Module Directives 
+-----------------
+
+This section is fairly incomplete but provides a good
+starting point to understand basic janus policy. At the moment
+the best source of information on this is still the source.
+
+An html based solution for organizing this is in the works.
+
+
+Janus modules decide what system calls will be allowed or
+denied. Modules are usually only responsible for determining
+policy for a single category of application semantics.
+For example the net module knows only about system calls related
+to network access. The exception to this is the basic module which 
+implements the policy for many different semantic categories and
+is always used (it can be thought of as implementing the baseline
+security policy that other modules simply extend).
+
+
+*basic 
+Usage: N/A
+
+The basic module is included by default. It specifies the 
+the policy for many system calls. 
+
++Group ID/UID
+    Calls: getuid, getgid, getegid getgroups, geteuid
+
+    All call requesting identity/group membership are allowed.
+
++Signals
+
+    Calls: kill, alarm, pause, signal, sigprocmask, sigsuspend, sigaction, 
+           sigpending, rt_sigaction, rt_sigprocmask
+
+    All calls regarding signal setups are allowed. Signals may
+    only be sent to processes which are also running in 
+    the sandbox.
+    
+
++Memory Areas
+    Calls: brk,mmap,mprotect,munmap
+
+    All calls regarding memory areas are allowed, note total
+    memory usage is dealt with by resource limits set elsewhere.
+    
++Sleeping
+    Call: nanosleep
+
+    Sleep is always allowed.
+
++System Info
+
+    Calls: times,uname,time,ftime,gettimeofday
+
+    Queries about hostname,kernel version, uptime, date etc.
+    are allowed. User concerned with information leakage may 
+    wish to consider an alternate policy.
+
++Timers/benchmarking
+    Calls: profil,getitimer,setitimer
+
+    Interval timers and profiling are considered safe.
+
++Personality
+    Call: personality
+
+    Only personality PER_LINUX is allowed.
+
++IPC
+   Call: ipc
+
+   Only shared memory IPC is allowed and only with 
+   private keys(i.e. private shared memory segments).
+
++Processes
+
+    Calls: fork,vfork
+    
+    Both vfork and fork are allowed assuming that there
+    are less then MAX_PROCS processes currently in
+    the sandbox, otherwise they are denied. The exit
+    values of these are trapped for use by Janus.
+
+    Call: exit
+
+    Exit is always allowed.
+
+    Calls: wait4,waitpid
+
+    Wait calls are always allowed, implicitly all proc's waited
+    on are also in the sandbox.
+
+    Calls: getpid,getppid
+
+    Inquiries about pid,ppid are always allowed.
+
+    +Process groups
+
+         Call: getpgrp,setpgid
+         
+         Always allowed.
+
+    +Sessions
+
+
++Resource Limits/priority
+
+    Calls: getrlimit,setrlimit,ulimit,nice
+    
+    getrlimit is always allowed, setrlimit is allowed only if 
+    the new resource limit is less than or equaled to the
+    existing process_limit(see Resource Limits) for the given 
+    resource. ulimit is always denied, it is an obsolete call.
+    A process may renice itself so long as it does not increase
+    its priority.
+
+
+    
++File Descriptors
+    Calls:  read, write, readv, writev, lseek, getdents 
+
+    All calls reading and manipulating file contents are allowed.
+
+    Calls: newselect, poll 
+
+    Calls which allow polling/waiting for events on descriptors
+    are allowed.
+    
+    Calls: dup, dup2
+    
+    Dup calls are safe as they do not alter what resources are
+    in our descriptor space.
+
+    Call: pipe
+
+    Always allowed.
+
+    Call: getcwd
+    
+    Always allowed.
+
+    Call: fcntl 
+    
+    ioctl, fsync
+
+
+
+*group 
+Usage: group (allow|deny) groupname,...
+Checks: setgid,setgroups
+
+The groups module will regulate whether a sandboxed process
+can setgid/setgroups to the gid corresponding to groupname.
+
+example: 
+
+    group allow nobody,bob
+
+    means that a sandboxed process may setgid to the gid
+    of nobody(usually 99) or bob. Note that,
+
+    group deny foo
+
+    would be redundant since by default all setgid,setgroups calls
+    will be denied.
+
+*uid 
+Usage: uid (allow|deny) username,...
+Checks: setuid
+
+The uid module will regulate whether a sandboxed process 
+can setuid/seteuid to to the uid corresponding to username.
+
+example:
+
+    uid allow root 
+
+    Means that a sandboxed process could setuid to root!
+
+    As with group,
+
+    uid deny root
+
+    would be redundant since by default all setuid/seteuid calls
+    will be denied.
+
+
+*net
+Usage: net (allow|deny) (connect|bind) (tcp|udp) address[/mask] port[/mask]
+       net (allow|deny) (connect|bind) unix-domain path
+
+Checks: socketcall
+
+The net module limits access to network resources (more generally it
+limits all ipc done with sockets). Anything an application wishes
+to do with sockets must be explicitly allowed by net. 
+
+Net can be used to allow two sorts of behavior, connecting to other
+processes (either local or remote) and accepting connections from
+other processes. 
+
+To allow a sandboxed application to connect to another process
+or send traffic directly to it we say.
+
+net allow connect type end-point
+
+(note that you cannot strictly connect to an end-point with 
+udp hence we say that connect allows connecting to and
+sending to a given host).
+
+To allow a sandboxed application to bind a socket (i.e. wait 
+for a connection from some other process) we say
+
+net allow bind type end-point
+
+type is either tcp/udp/unix-domain and end-point is
+the address or set of addresses that we wish to allow connections
+to.
+
+First suppose type is unix-domain. This is a simple case since the
+end-point is given by a path. 
+
+example:
+
+net allow connect unix-domain /var/.tmp_sock
+
+this allows a sandboxed process to connect to /var/.tmp_sock
+
+(NOTE: pathnames for unix domain sockets are currently
+       checked only for a literal match!!!, this
+       is really broken and will be fixed shortly).
+
+net allow bind unix-domain /var/*
+
+this allows a sandboxed process to bind a socket with any path
+in /var.
+
+
+Second, suppose type is tcp or udp. This is more complicated because
+and address now has two parts, an ip address and a port number. 
+
+to specify an IP address we have several options.
+
+1) a dotted quad giving an absolute address (such as 169.229.60.104)
+2) a hostname (such as cronus.cs.berkeley.edu), note that hostnames
+   are potentially resolved using DNS therefor this is highly problematic!!,
+   avoid using textual hostnames at all cost.
+3) ALL_IP_ADDRS (which will match all ip addresses).
+4) MYHOST_ADDR (which will be resolved to the ip address of the 
+   localhost by janus, note that if the localhost has multiple ip addresses
+   this will fail and each address must be specified explicitly).
+
+to specify a port we simply give the port number as an integer
+in the correct range.
+
+
+example:
+
+net allow connect tcp 128.36.31.50 80 
+
+allows tcp connections to be made to the host at 128.36.31.50 on port 80.
+
+net allow connect upd frob.berkeley.edu 53
+
+allows upd traffic to be sent to frob.cs.berkeley.edu on port 53 
+
+Suppose that we want to allow access to some set of ports or addresses,
+we can accomplish this by specifying an address mask and/or a port mask.
+
+Suppose for example I want to allow a sandboxed process to connect
+to any DNS server on my subnet (128.32.43) at Berkeley. I would
+say 
+
+net allow connect udp 128.32.43.0/255.255.255.0 53
+net allow connect tcp 128.32.43.0/255.255.255.0 53
+
+What this says is that net should take any connection request
+for a tcp or upd connection on port 53, apply the mask 255.255.255.0 
+to the requested address and compare it to 128.32.43.0. This way
+any address with the first three numbers matching (i.e. any address
+in my subnet) will be a perfect match.
+
+The same thing can be done with ports. Suppose that I want to 
+allow a sandboxed process to make tcp connections to any port on 
+my local machine.
+
+I can say,
+
+net allow connect tcp MYHOST_ADDR 0/0
+
+
+*path
+
+Usage: path (allow|deny) (read|write|unlink|exec),... path,...
+Checks: open,creat,symlink,link,chdir,mkdir,rmdir,rename,utime,fchdir,
+        readlink,stat,statfs,lstat,sysfs,access,execve
+
+path allows access to file system resources. 
+
+path allow read /var/foo 
+
+will allow the contents of /var/foo to be read. 
+Note that directories are also treated as files so 
+if a program wishes to manipulate a directory you must 
+first allow access to the directory. For example 
+if a program wishes to stat a directory you must 
+allow it to read that directory.
+
+In order for a program to be able to execve a file
+it must have both read and exec access to that file.
+
+
+
+
+
+
+
+Some notes on paths (as used in path)
+---------------------------------------------
+
+All paths given to Janus modules must absolute paths. 
+
+You are allowed to use wildcards in the paths:
+  * matches any string
+ \x matches x, for all x (i.e. backslash escapes special characters)
+
+  Note that this is NOT like shell globbing:
+            /tmp/* will match the path /tmp/foo/bar
+            /tmp/* will match the path /tmp/.baz
+
+ Paths will be canonicalized by the kernel before they
+ are checked by janus. When janus checks a path it checks
+ it in two forms, canonicalized with and without symlink 
+ expansion (except in special cases such as open("...", O_NOFOLLOW)). 
+ In order for an access with a given path to be allowed both forms 
+ must be allowed, for example suppose we janus sees the call.
+ 
+ open("/tmp/foo",O_RDONLY)
+
+ and /tmp/foo is a symlink to /tmp/bar, then both /tmp/foo and /tmp/bar
+ must be allowed.
+
+ So, 
+
+ path allow read /tmp/*
+ or 
+ path allow read /tmp/foo, /tmp/bar
+
+ Would allow this call, but only
+
+ path allow read /tmp/foo
+
+ or 
+
+ path allow read /tmp/bar
+
+ would not.
+
+
+
+
+Related Work
+-------------
+
+Related Documents
+-----------------
+
+
+The paper describing the original Janus prototype:
+
+    Ian Goldberg, David Wagner, Randi Thomas, Eric Brewer,"A Secure 
+    Environment for Untrusted Helper Applications", USENIX Security 
+    Symposium V Proceedings, 1996
+    
+    http://www.cs.berkeley.edu/~daw/papers/janus-usenix96.ps
+
+Further exploration is found in Dave Wagner's Master's thesis: 
+
+    "Janus: an approach for the confinement of untrusted helper applications"
+    filed as berkeley technical, report UCB//CSD-99-1056
+
+    http://sunsite.berkeley.edu/Dienst/UI/2.0/Describe/ncstrl.ucb/CSD-99-1056
+
+Related Software
+----------------
+
+
+
+References
+-----------
+
+[1] R.W. Steven's, Advanced Programming in the UNIX Environment.
+
+

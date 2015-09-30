@@ -1,0 +1,11 @@
+#!/bin/sh
+module="mod_janus"
+device="mod_janus"
+
+# Remove the kernel module
+/sbin/rmmod $module
+
+
+# Remove the device entry
+
+rm -f /dev/${device}

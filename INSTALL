@@ -1,0 +1,70 @@
+Installation instructions for Janus
+-----------------------------------
+
+Janus is a package that allows you to run other applications 
+in a restricted "sandboxed" environment. The program 
+that allows you to do this is called janus, it requires
+the use of a kernel module called mod_janus. In order
+to use janus you must also install mod_janus.
+
+System requirements:
+
+* mod_janus will run only under the x86 architecture
+* mod_janus is not SMP safe at this time.
+* mod_janus has only be tested with the 2.2.x Linux kernel
+  (specifically 2.2.5,2.2.9,2.2.12,2.2.14,2.2.16),
+  but if you are running a different version of the
+  2.2.x kernel you should still be fine.
+
+
+Installing:
+
+1) Modify the top level makefile to reflect where you
+   want janus installed.
+
+Note: You must typically be root in order for this to work!
+
+$ make install 
+
+will build janus and mod_janus and install janus in 
+the location you specified.
+
+2) Installing mod_janus
+
+As mod_janus does not have a permanent major number assigned to
+you must create a new device entry for it each time it
+is loaded, this is not all that bad, as the script 
+
+Note: install_mod loads a kernel module so you must run
+      it as root.
+
+To install mod_janus now simply run install_mod.
+install_mod will take care of this all for you. 
+
+You must run install_mod before you can use janus!!
+
+If you would like to have mod_janus installed at startup 
+simply add install_mod to the appropriate startup
+script (rc.local on redhat for example).
+
+To test that janus is installed properly you can 
+try running bash in a trivial sandbox with the command.
+
+janus -i -f examples/tiny.janus /bin/bash
+
+Once you have successfully installed janus, see janus(1) and
+the contents of the docs directory for further instructions
+on using janus.
+
+Uninstalling
+------------
+
+Note: this must be run as root
+
+To remove the kernel module and device entry simply run
+remove_mod.
+
+then manually remove janus.1, janus and mod_janus from where
+they were installed (look at the top level make file
+for the location that was set).
+
