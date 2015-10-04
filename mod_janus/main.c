@@ -6,7 +6,7 @@
  * of this file, and for a DISCLAIMER OF ALL WARRANTIES.
  */
 
-#include <linux/kernel.h>
+#include <linux/kernel.h>       /* [KEN] These are needed to make kernel modules */
 #include <linux/module.h>
 #include <linux/version.h>
 
@@ -996,12 +996,20 @@ STATIC int fcap_close(struct inode *inode, struct file *filep)
 
 
 /* install and cleanup */
+/* [KEN] a "start" (initialization) function 
+    Typically, init_module() either registers a handler for something with the kernel, 
+    or it replaces one of the kernel functions with its own code (usually code to do 
+    something and then call the original function)
 
+    Source: http://www.tldp.org/LDP/lkmpg/2.6/html/lkmpg.html#AEN119
+*/
 int init_module(void)
 {
     int ret;
 
     /* request a major number dynamically */
+    /* [KEN] Register as a character device,
+        see: https://www.win.tue.nl/~aeb/linux/lk/lk-11.html  */
     ret = register_chrdev(0, "mod_janus", &fcap_file_operations);
 
     if (ret < 0) {
@@ -1018,6 +1026,7 @@ int init_module(void)
     return 0;
 }
 
+/* [KEN] "end" function */
 int cleanup_module(void)
 {
     int ret;
