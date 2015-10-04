@@ -51,6 +51,8 @@ static pcb_t *head_pcb = 0;
 
 static pcb_t *mallocpcb(void)
 {
+    /* linked-list of pcbs, add new one to head, return head
+        note that *head_pcb is also global */
     pcb_t *p;
 
     p = (pcb_t *) malloc(sizeof(pcb_t));
@@ -149,6 +151,12 @@ int attach(pid_t pid)
     //presumably our trapsets are setup
     assert(global_masks_initted);
 
+    /* {global_enter_mask, global_exit_mask, pid} passed to ioctl as args 
+        in bind_monitor. ioctl is used to monitor process
+        From paper:
+        /proc uses ioctls on a special file under the /proc filelesystem: the tracer 
+        issues an ioctl that blocks until a tracing event is available at the tracee. 
+        TODO: Investigate HOW ioctl is used to monitor processes */
     err = bind_monitor(md, pid, global_enter_mask, global_exit_mask);
 
     if (err < 0) REPORT_ERR();

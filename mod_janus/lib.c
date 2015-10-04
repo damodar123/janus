@@ -37,6 +37,10 @@ int bind_monitor(monitor_t this_monitor, unsigned int watch_me,
 trap_set enter_mask,trap_set exit_mask)
 {
         struct bind_args args = {enter_mask,exit_mask,watch_me};
+        //FC_IOCTL_BIND const defined in fcap_kernel.h
+        /* ioctl syscall is used to monitor proces.
+          this_monitor is a file descriptor for a special device
+          in /dev/mod_janus */
         return ioctl(this_monitor,FC_IOCTL_BIND,&args);
 }
 
