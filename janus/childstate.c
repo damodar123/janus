@@ -459,6 +459,7 @@ void childstate_start_child(char * path,char * * argv,int interactive)
         assert(rv == 1);
         close(runpipe[0]);
 
+        /* starting_env initialized by setup_config_init_tables */
         execve(path,argv,starting_env);
 
         if (errno == ENOENT)

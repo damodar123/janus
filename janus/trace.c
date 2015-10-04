@@ -132,9 +132,13 @@ int attach(pid_t pid)
     //make sure we are not already tracing this process
     assert(!pid2pcb(pid));
 
-    //Defined in fcap.h, library for mod_janus
+    /* Defined in fcap.h, library for mod_janus
+        FCAP_DEVICE is /dev/mod_janus
+        open syscall is made, returns a file descriptor
+    */
     md = create_monitor(FCAP_DEVICE);
 
+    /* md < 0 -> error on open syscall */
     if (md < 0) {
         PERROR("Error: \"%s\", unable to open %s.",strerror(errno),FCAP_DEVICE);
         PERROR("Did you remember to load %s?", FCAP_DEVICE);
