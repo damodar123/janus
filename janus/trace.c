@@ -132,6 +132,7 @@ int attach(pid_t pid)
     //make sure we are not already tracing this process
     assert(!pid2pcb(pid));
 
+    //Defined in fcap.h, library for mod_janus
     md = create_monitor(FCAP_DEVICE);
 
     if (md < 0) {

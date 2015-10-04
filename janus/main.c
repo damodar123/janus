@@ -448,6 +448,7 @@ int main(int argc, char **argv)
 
     fclose(cf);
 
+    /* This is where all the fun stuff is */
     childstate_start_child(argv[0],argv,interactive);
     run_sandbox(systable);
     

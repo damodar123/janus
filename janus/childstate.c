@@ -358,6 +358,7 @@ static void setup_state(int pipefd1, int pipefd2, int interactive)
 
 void verify_startstate(void)
 {
+    /* check if policy file specified, root priv, etc. */
     int err = 0;
 
     if (!starting_dir) {
@@ -409,6 +410,7 @@ to run command with the current child state and attach to
 it,errors here are basically fatal so no need to return anything 
 */
 
+/* called from main() */
 void childstate_start_child(char * path,char * * argv,int interactive)
 {
    //two pairs of pipes for synchronization
@@ -423,6 +425,9 @@ void childstate_start_child(char * path,char * * argv,int interactive)
     verify_startstate();
 
     /* Make pipes */
+    /* Pipes are unidirectional data channels used for IPC 
+        takes int[2] as argument, first is used as read end, second is used
+        as write end. */ 
     pipe(attachpipe);
     pipe(runpipe);
 
@@ -430,6 +435,9 @@ void childstate_start_child(char * path,char * * argv,int interactive)
     pid = fork();
 
     if (!pid) {
+        /* child process */
+        /* File descriptors for these ends of pipes are closed because 
+            the child process do not need them at this point. */
         close(attachpipe[0]);
         close(runpipe[1]);
 
@@ -437,11 +445,16 @@ void childstate_start_child(char * path,char * * argv,int interactive)
         setup_state(attachpipe[1], runpipe[0], interactive);
 
         //Signal the parent to attach
+        /* See else clause, the parent process reads from the read end
+            of attachpipe */
         rv = write(attachpipe[1], buf, 1);
         assert(rv == 1);
         close(attachpipe[1]);
 
         //Wait until the parent is ready
+        /* See after the if statement. parent process will continue running
+            whereas child process with execve then exit.
+            Parent will write to runpipe's write end */
         rv = read(runpipe[0], buf, 1);
         assert(rv == 1);
         close(runpipe[0]);
@@ -455,6 +468,7 @@ void childstate_start_child(char * path,char * * argv,int interactive)
         exit(1);
 
     } else {
+        /* parent process */
         close(attachpipe[1]);
         close(runpipe[0]);
 
@@ -469,6 +483,10 @@ void childstate_start_child(char * path,char * * argv,int interactive)
         close(attachpipe[0]);
     } 
     
+    /* Hence why attachpipe is called 'attachpipe'. IPC used so that child
+        process can communicate to parent that it is ready to attach.
+        attach is defined in trace.c
+    */
     err = attach(pid);        //attach  to new proc
 
     if (err < 0) {
