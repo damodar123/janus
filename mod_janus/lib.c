@@ -24,6 +24,11 @@
 
 int create_monitor(const char * watch_device)
 {
+        /* This gets called in two places
+          in trace.c's attach(), which is used by the janus cli tool
+          in which case /dev/mod_janus is the watch_device
+          and in watch.c, in which case /dev/fcap is the watch_device
+        */
         return open(watch_device,O_RDWR);
 }
 

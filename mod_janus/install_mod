@@ -1,4 +1,5 @@
 #!/bin/sh
+#/dev/fcap isn't created here. hmm..?
 module="mod_janus"
 device="mod_janus"
 user="root"
@@ -15,6 +16,7 @@ major=`cat /proc/devices | awk "\\$2==\"$module\" {print \\$1}"`
 # Usually the script is shorter, it's scull that has several devices in it.
 
 rm -f /dev/${device}
+#Make filesystem node
 mknod /dev/${device} c $major 0
 
 chown $user  /dev/${device}

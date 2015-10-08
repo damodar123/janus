@@ -60,6 +60,7 @@ int main(int argc, char * argv[])
         for (i = 0; i < top_arg; i++) 
                 TRAP_SET(i,&enter_set); 
 
+        /* open syscall for /dev/fcap */
         ret = create_monitor("/dev/fcap");
 
         if (ret < 0) {
