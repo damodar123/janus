@@ -295,6 +295,7 @@ int waitevent(prstat_t * new_event)
         ;
     ASSERT(i != (max_fd + 1));
 
+    /* Reads requests sent to monitoring device */
     ret = read_request(i, &new_request);
 
     if (ret != sizeof(request_t))

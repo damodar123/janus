@@ -281,6 +281,8 @@ static void run_sandbox(actionlist systable[NSYSCALL])
     int rv;
 
     while (1) {
+        /* Awaiting a request to be sent to monitoring device
+        via ioctl syscall */
         rv = waitevent(&prstat);
         clear_deny();
 
