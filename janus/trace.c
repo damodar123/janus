@@ -178,6 +178,10 @@ int attach(pid_t pid)
 
 int runtraced(pcb_t * p, int abortp)
 {
+    /* This is used to check an action event. See action_monitor
+        This is used to allow or disallow certain actions.
+        Used by allow_event and deny_event
+    */
     int err;
 
     assert(p);

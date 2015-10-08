@@ -58,6 +58,9 @@ int read_request(monitor_t wait_on_me, request_t * new_request)
 
 int action_monitor(monitor_t this_monitor, action_t action)
 {
+      /* This will, upon some process event (trapped call entry)
+        put the process in a suspended state. This is so mod_janus
+        can determine what to do next (disallow? allow? kill?) */
        struct action_args args = {action};
        return write(this_monitor,&args,sizeof(struct action_args));
 }
