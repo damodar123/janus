@@ -75,7 +75,8 @@ int main(int argc, char * argv[])
 
         FD_ZERO(&wait_set);
 
-        ret = bind_monitor(watch_this,watched1,enter_set,exit_set);
+        /* Monitor is bound to a process */
+        ret = bind_monitor(watch_this /*monitoring device */ ,watched1 /*process to be watched */,enter_set,exit_set);
 
         if (ret < 0) {
               perror("bind_m");  
